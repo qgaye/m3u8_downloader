@@ -54,13 +54,13 @@ class M3U8Downloader {
     _logger.info('[${Isolate.current.debugName}] start download');
     var completers = <Completer>[];
     var receivePorts = <ReceivePort>[];
-    for (var segments in indexes) {
+    for (var i = 0; i < indexes.length; i++) {
       var completer = Completer();
       completers.add(completer);
       var receivePort = ReceivePort();
       receivePorts.add(receivePort);
       await Isolate.spawn<M3U8DownloadTask>(_isolateDownload,
-          M3U8DownloadTask(segments, receivePort.sendPort, this));
+          M3U8DownloadTask(indexes[i], receivePort.sendPort, this), debugName: 'downloader-isolate-$i');
       receivePort.listen((result) {
         if (result as bool) {
           _logger.info('[${Isolate.current.debugName}] finish');
@@ -89,6 +89,12 @@ class M3U8Downloader {
   }
 
   static Future<void> _isolateDownload(M3U8DownloadTask task) async {
+    Logger.root.level = Level.INFO;
+    recordStackTraceAtLevel = Level.SEVERE;
+    Logger.root.onRecord.listen((record) {
+      print(
+          '${record.time} [${record.level.name}] [${record.loggerName}] ${record.message}');
+    });
     for (var i in task.indexes) {
       await _download(
           task.m3u8Downloader.m3u8.segments[i],
@@ -102,16 +108,16 @@ class M3U8Downloader {
 
   static Future<void> _download(M3U8Segment segment, String path, String name,
       String urlPrefix, M3U8Encrypt? m3u8Encrypt) async {
-    _logger.info('[${Isolate.current.debugName}] downloading ${segment.uri}');
     var tsUri = segment.uri!.startsWith(httpRegExp)
         ? segment.uri!
         : urlPrefix + segment.uri!;
-    var data = await decrypt(await getBytes(tsUri), m3u8Encrypt);
     var tsFile = File('$path/$name/${Uri.parse(tsUri).pathSegments.last}');
     if (await tsFile.exists()) {
       _logger.info('[${Isolate.current.debugName}] skip ${segment.uri}');
       return;
     }
+    _logger.info('[${Isolate.current.debugName}] downloading ${segment.uri}');
+    var data = await decrypt(await getBytes(tsUri), m3u8Encrypt);
     await tsFile.writeAsBytes(data);
   }
 
