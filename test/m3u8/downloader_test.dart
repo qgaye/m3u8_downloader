@@ -29,8 +29,9 @@ void main() async {
         name: Uri.parse(url)
             .pathSegments
             .lastWhere((element) => element.isNotEmpty));
-    await downloader.download();
-    await downloader.merge();
+    // await downloader.download();
+    // await downloader.merge();
+    await downloader.convert();
   });
 
   test('test222', () {

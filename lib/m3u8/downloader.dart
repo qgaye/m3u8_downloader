@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter/return_code.dart';
 import 'package:logging/logging.dart';
 import 'package:m3u8_downloader/common/http.dart';
 import 'package:m3u8_downloader/m3u8/entity.dart';
@@ -60,7 +62,8 @@ class M3U8Downloader {
       var receivePort = ReceivePort();
       receivePorts.add(receivePort);
       await Isolate.spawn<M3U8DownloadTask>(_isolateDownload,
-          M3U8DownloadTask(indexes[i], receivePort.sendPort, this), debugName: 'downloader-isolate-$i');
+          M3U8DownloadTask(indexes[i], receivePort.sendPort, this),
+          debugName: 'downloader-isolate-$i');
       receivePort.listen((result) {
         if (result as bool) {
           _logger.info('[${Isolate.current.debugName}] finish');
@@ -86,6 +89,21 @@ class M3U8Downloader {
         throw M3U8Exception('no such ts segment');
       }
     }
+  }
+
+  Future<void> convert() async {
+    FFmpegKit.executeAsync(
+        '-i $path/$name/main.ts -c:v copy -c:a copy $path/$name/main.mp4',
+        (session) async {
+      final returnCode = await session.getReturnCode();
+      if (ReturnCode.isSuccess(returnCode)) {
+        _logger.info('Success');
+      } else if (ReturnCode.isCancel(returnCode)) {
+        _logger.info('Cancel');
+      } else {
+        _logger.info('Error');
+      }
+    });
   }
 
   static Future<void> _isolateDownload(M3U8DownloadTask task) async {

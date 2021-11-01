@@ -34,7 +34,7 @@ class MainApp extends StatelessWidget {
   void _onPressed() {
     debugPrint("HELLO");
     FFmpegKit.executeAsync(
-        '-i /Users/qgaye/Downloads/194770.ts -c:v libx264 -c:a aac /Users/qgaye/Downloads/output.mp4',
+        '-i /Users/qgaye/Downloads/ssis-215/main.ts -c:v copy -c:a copy /Users/qgaye/Downloads/ssis-215/main.mp4',
         (session) async {
       final returnCode = await session.getReturnCode();
       if (ReturnCode.isSuccess(returnCode)) {
