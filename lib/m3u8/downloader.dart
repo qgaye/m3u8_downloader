@@ -7,6 +7,7 @@ import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter/return_code.dart';
 import 'package:logging/logging.dart';
 import 'package:m3u8_downloader/common/http.dart';
+import 'package:m3u8_downloader/common/logger.dart';
 import 'package:m3u8_downloader/m3u8/entity.dart';
 import 'package:m3u8_downloader/m3u8/parser.dart';
 import 'package:encrypt/encrypt.dart';
@@ -23,6 +24,10 @@ class M3U8Downloader {
   late String urlPrefix;
   late M3U8 m3u8;
   late M3U8Encrypt? m3u8Encrypt;
+
+  List<M3U8Segment> successSegments = [];
+  Map<M3U8Segment, int> retrySegments = {};
+  List<M3U8Segment> failedSegments = [];
 
   M3U8Downloader._(this.url, this.path, this.name, this.parallelism);
 
@@ -53,20 +58,20 @@ class M3U8Downloader {
       return [for (var j = i; j < m3u8.segments.length; j += parallelism) j];
     });
 
-    _logger.info('[${Isolate.current.debugName}] start download');
+    _logger.info('start download');
     var completers = <Completer>[];
-    var receivePorts = <ReceivePort>[];
+    var receivePorts = <ReceivePort, Isolate>{};
     for (var i = 0; i < indexes.length; i++) {
       var completer = Completer();
       completers.add(completer);
       var receivePort = ReceivePort();
-      receivePorts.add(receivePort);
-      await Isolate.spawn<M3U8DownloadTask>(_isolateDownload,
+      var isolate = await Isolate.spawn<M3U8DownloadTask>(_isolateDownload,
           M3U8DownloadTask(indexes[i], receivePort.sendPort, this),
           debugName: 'downloader-isolate-$i');
+      receivePorts[receivePort] = isolate;
       receivePort.listen((result) {
         if (result as bool) {
-          _logger.info('[${Isolate.current.debugName}] finish');
+          _logger.info('${receivePorts[receivePort]!.debugName} finish');
           completer.complete();
           receivePort.close();
         } else {
@@ -74,7 +79,7 @@ class M3U8Downloader {
         }
       });
     }
-    _logger.info('[${Isolate.current.debugName}] waiting download finish');
+    _logger.info('waiting download finish');
     await Future.wait(completers.map((c) => c.future).toList());
   }
 
@@ -106,13 +111,18 @@ class M3U8Downloader {
     });
   }
 
+  Future<void> clean() async {
+    for (var segment in m3u8.segments) {
+      var ts = File('$path/$name/${segment.uri}');
+      if (await ts.exists()) {
+        await ts.delete();
+      } else {
+        _logger.severe('not exist ts, file: ${ts.path}');
+      }
+    }}
+
   static Future<void> _isolateDownload(M3U8DownloadTask task) async {
-    Logger.root.level = Level.INFO;
-    recordStackTraceAtLevel = Level.SEVERE;
-    Logger.root.onRecord.listen((record) {
-      print(
-          '${record.time} [${record.level.name}] [${record.loggerName}] ${record.message}');
-    });
+    initLoggerConfig();
     for (var i in task.indexes) {
       await _download(
           task.m3u8Downloader.m3u8.segments[i],
@@ -131,10 +141,10 @@ class M3U8Downloader {
         : urlPrefix + segment.uri!;
     var tsFile = File('$path/$name/${Uri.parse(tsUri).pathSegments.last}');
     if (await tsFile.exists()) {
-      _logger.info('[${Isolate.current.debugName}] skip ${segment.uri}');
+      _logger.info('skip ${segment.uri}');
       return;
     }
-    _logger.info('[${Isolate.current.debugName}] downloading ${segment.uri}');
+    _logger.info('downloading ${segment.uri}');
     var data = await decrypt(await getBytes(tsUri), m3u8Encrypt);
     await tsFile.writeAsBytes(data);
   }

@@ -3,20 +3,16 @@ import 'package:ffmpeg_kit_flutter/return_code.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:m3u8_downloader/common/http.dart';
+import 'package:m3u8_downloader/common/logger.dart';
 import 'package:m3u8_downloader/m3u8/downloader.dart';
 import 'package:m3u8_downloader/site/jable/jable.dart';
 import 'package:m3u8_downloader/support.dart';
 
 void main() async {
   var logger = Logger('main-test');
-  Logger.root.level = Level.INFO;
-  recordStackTraceAtLevel = Level.SEVERE;
-  Logger.root.onRecord.listen((record) {
-    print(
-        '${record.time} [${record.level.name}] [${record.loggerName}] ${record.message}');
-  });
+  initLoggerConfig();
 
-  var url = 'https://jable.tv/videos/ssis-215/';
+  var url = 'https://jable.tv/videos/ssis-219/';
   var m3u8_url =
       'https://ac-fors-caid.mushroomtrack.com/hls/ckr310xvtfSag1XUpSA9dw/1635620477/19000/19477/19477.m3u8';
 
@@ -29,9 +25,10 @@ void main() async {
         name: Uri.parse(url)
             .pathSegments
             .lastWhere((element) => element.isNotEmpty));
-    // await downloader.download();
-    // await downloader.merge();
-    await downloader.convert();
+    await downloader.download();
+    await downloader.merge();
+    // await downloader.convert();
+    await downloader.clean();
   });
 
   test('test222', () {

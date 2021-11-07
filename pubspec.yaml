@@ -38,6 +38,7 @@ dependencies:
   logging: ^1.0.2
   encrypt: ^5.0.1
   ffmpeg_kit_flutter: ^4.5.0
+  file_picker: ^4.2.1
 
 dev_dependencies:
   flutter_test:
