@@ -32,20 +32,34 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends State<MainApp> {
-  final _bottomNavPages = <Widget>[
+  final _pages = <Widget>[
     const HomePage(),
     const AccountPage(),
   ];
+
   var _selectedPageIndex = 0;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _selectedPageIndex);
+  }
 
   void _onNavBottomTapped(int index) {
-    setState(() => _selectedPageIndex = index);
+    setState(() {
+      _selectedPageIndex = index;
+      _pageController.jumpToPage(_selectedPageIndex);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _bottomNavPages[_selectedPageIndex],
+      body: PageView(
+        controller: _pageController,
+        children: _pages,
+      ),
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).primaryColor,
         child: Row(

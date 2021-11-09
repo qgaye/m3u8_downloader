@@ -16,8 +16,8 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final DownloaderTaskList taskList = DownloaderTaskList();
+class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
+  final DownloaderList downloaderList = DownloaderList();
 
   Future<void> _addTapped() async {
     var downloaderTaskConfig = await Navigator.push<DownloaderTaskConfig?>(
@@ -27,9 +27,9 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     _logger.info(downloaderTaskConfig.toString());
-    var downloaderTask = DownloaderTask(downloaderTaskConfig);
-    taskList.add(downloaderTask);
-    downloaderTask.execute();
+    var downloader = M3U8Downloader(downloaderTaskConfig);
+    downloaderList.add(downloader);
+    downloader.execute();  // not await
   }
 
   @override
@@ -47,16 +47,16 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Center(
         child: ChangeNotifierProvider.value(
-          value: taskList,
+          value: downloaderList,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.6,
               maxHeight: MediaQuery.of(context).size.height * 0.8,
             ),
-            child: Consumer<DownloaderTaskList>(
+            child: Consumer<DownloaderList>(
               builder: (context, downloaderTaskList, child) {
                 return Column(
-                  children: _buildDownloaderTaskList(),
+                  children: _buildDownloaderList(),
                 );
               },
             ),
@@ -66,21 +66,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<Widget> _buildDownloaderTaskList() {
+  List<Widget> _buildDownloaderList() {
     var columns = <Widget>[];
-    for (var task in taskList.list) {
+    for (var downloader in downloaderList.list) {
       columns.add(
         ChangeNotifierProvider.value(
-          value: task,
-          child: Consumer<DownloaderTask>(
+          value: downloader,
+          child: Consumer<M3U8Downloader>(
             builder: (context, downloaderTask, child) {
               return Card(
                 child: Column(
                   children: [
-                    Text(task.config.taskName),
-                    Text(task.config.sourceUrl),
-                    Text('progress: ${task.progress}'),
-                    Text('total: ${task.total}'),
+                    Text(downloader.config.taskName),
+                    Text(downloader.config.sourceUrl),
+                    Text('progress: ${downloader.progress}'),
+                    Text('total: ${downloader.total}'),
                   ],
                 ),
               );
@@ -91,13 +91,16 @@ class _HomePageState extends State<HomePage> {
     }
     return columns;
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
-class DownloaderTaskList with ChangeNotifier {
-  List<DownloaderTask> list = [];
+class DownloaderList with ChangeNotifier {
+  List<M3U8Downloader> list = [];
 
-  void add(DownloaderTask task) {
-    list.add(task);
+  void add(M3U8Downloader downloader) {
+    list.add(downloader);
     notifyListeners();
   }
 }
@@ -118,40 +121,3 @@ class DownloaderTaskConfig {
   }
 }
 
-class DownloaderTask with ChangeNotifier {
-  DownloaderTaskConfig config;
-  late M3U8Downloader downloader;
-  int progress = 0;
-  int? total;
-  int status = 0;
-
-  DownloaderTask(this.config);
-
-  void incrementProgress(int i) {
-    progress += i;
-    notifyListeners();
-  }
-
-  Future<void> init() async {
-    downloader = await M3U8Downloader.create(config.sourceUrl,
-        path: config.dictionary,
-        name: config.taskName,
-        parallelism: config.concurrency);
-    total = downloader.m3u8.segments.length;
-  }
-
-  Future<void> execute() async {
-    await init();
-    notifyListeners();
-    await downloader.download();
-    notifyListeners();
-    await downloader.merge();
-    notifyListeners();
-    await downloader.convert();
-    notifyListeners();
-    if (config.cleanTsFiles) {
-      await downloader.clean();
-      notifyListeners();
-    }
-  }
-}

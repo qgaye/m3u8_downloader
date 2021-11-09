@@ -5,89 +5,109 @@ import 'dart:typed_data';
 
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter/return_code.dart';
+import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:m3u8_downloader/common/http.dart';
 import 'package:m3u8_downloader/common/logger.dart';
 import 'package:m3u8_downloader/m3u8/entity.dart';
 import 'package:m3u8_downloader/m3u8/parser.dart';
-import 'package:encrypt/encrypt.dart';
+import 'package:encrypt/encrypt.dart' as e;
+import 'package:m3u8_downloader/page/home.dart';
 
 final _logger = Logger('m3u8.downloader');
 
 final httpRegExp = RegExp('https?://');
 
-class M3U8Downloader {
-  String url;
-  String path;
-  String name;
-  int parallelism;
-  late String urlPrefix;
+class M3U8Downloader with ChangeNotifier {
+  DownloaderTaskConfig config;
   late M3U8 m3u8;
-  late M3U8Encrypt? m3u8Encrypt;
 
   List<M3U8Segment> successSegments = [];
   Map<M3U8Segment, int> retrySegments = {};
   List<M3U8Segment> failedSegments = [];
 
-  M3U8Downloader._(this.url, this.path, this.name, this.parallelism);
+  int _progress = 0;
+  int _total = -1;
+  String _status = "Prepare";
 
-  static Future<M3U8Downloader> create(String url,
-      {String path = '', String? name, int parallelism = 5}) async {
-    if (!url.startsWith(httpRegExp) || !url.endsWith('.m3u8')) {
+  int get progress => _progress;
+
+  set progress(int value) {
+    _progress = value;
+    notifyListeners();
+  }
+
+  int get total => _total;
+
+  set total(int value) {
+    _total = value;
+    notifyListeners();
+  }
+
+  String get status => _status;
+
+  set status(String value) {
+    _status = value;
+    notifyListeners();
+  }
+
+  var downloadSegmentIndex = 0;
+
+  M3U8Downloader(this.config);
+
+  Future<void> init() async {
+    if (!config.sourceUrl.startsWith(httpRegExp) ||
+        !config.sourceUrl.endsWith('.m3u8')) {
       throw M3U8Exception('invalid url');
     }
-    var m3u8Downloader = M3U8Downloader._(url, path,
-        name ?? DateTime.now().millisecondsSinceEpoch.toString(), parallelism);
-    m3u8Downloader.urlPrefix =
-        url.split(Uri.parse(url).pathSegments.last).first;
-    m3u8Downloader.m3u8 = await _buildM3U8(url);
-    if (!_checkM3U8(m3u8Downloader.m3u8)) {
+    m3u8 = await _buildM3U8(config.sourceUrl);
+    if (!_checkM3U8(m3u8)) {
       throw M3U8Exception('invalid m3u8');
     }
-    return m3u8Downloader;
+    total = m3u8.segments.length;
+    status = 'Init';
   }
 
   Future<void> download() async {
-    m3u8Encrypt = m3u8.key == null ? null : await _buildEncrypt(m3u8.key!);
-    var dir = Directory('$path/$name');
+    var dir = Directory('${config.dictionary}/${config.taskName}');
     if (!(await dir.exists())) {
       await dir.create();
     }
 
-    var indexes = List<List<int>>.generate(parallelism, (i) {
-      return [for (var j = i; j < m3u8.segments.length; j += parallelism) j];
-    });
-
-    _logger.info('start download');
     var completers = <Completer>[];
-    var receivePorts = <ReceivePort, Isolate>{};
-    for (var i = 0; i < indexes.length; i++) {
+    var sendPortMap = <ReceivePort, SendPort>{};
+    var isolateMap = <ReceivePort, Isolate>{};
+    for (var i = 0; i < config.concurrency; i++) {
       var completer = Completer();
       completers.add(completer);
       var receivePort = ReceivePort();
-      var isolate = await Isolate.spawn<M3U8DownloadTask>(_isolateDownload,
-          M3U8DownloadTask(indexes[i], receivePort.sendPort, this),
+      var isolate = await Isolate.spawn(
+          _isolateDownload1, M3U8DownloadTask1(m3u8, config, receivePort.sendPort),
           debugName: 'downloader-isolate-$i');
-      receivePorts[receivePort] = isolate;
-      receivePort.listen((result) {
-        if (result as bool) {
-          _logger.info('${receivePorts[receivePort]!.debugName} finish');
-          completer.complete();
-          receivePort.close();
-        } else {
-          throw M3U8Exception('unknown message');
+      isolateMap[receivePort] = isolate;
+      receivePort.listen((message) {
+        if (message is SendPort) {
+          sendPortMap[receivePort] = message;
         }
+        if (downloadSegmentIndex >= m3u8.segments.length) {
+          receivePort.close();
+          isolateMap[receivePort]!.kill();
+          completer.complete();
+        }
+        sendPortMap[receivePort]!.send(downloadSegmentIndex++);
+        progress += 1;
       });
     }
+
     _logger.info('waiting download finish');
     await Future.wait(completers.map((c) => c.future).toList());
   }
 
   Future<void> merge() async {
-    var file = File('$path/$name/main.ts');
+    var file = File('${config.dictionary}/${config.taskName}/main.ts');
     for (var segment in m3u8.segments) {
       _logger.info('merging ${segment.uri}');
-      var ts = File('$path/$name/${segment.uri}');
+      var ts = File('${config.dictionary}/${config.taskName}/${segment.uri}');
       if (await ts.exists()) {
         await file.writeAsBytes(await ts.readAsBytes(), mode: FileMode.append);
       } else {
@@ -98,7 +118,7 @@ class M3U8Downloader {
 
   Future<void> convert() async {
     FFmpegKit.executeAsync(
-        '-i $path/$name/main.ts -c:v copy -c:a copy $path/$name/main.mp4',
+        '-i ${config.dictionary}/${config.taskName}/main.ts -c:v copy -c:a copy ${config.dictionary}/${config.taskName}/main.mp4',
         (session) async {
       final returnCode = await session.getReturnCode();
       if (ReturnCode.isSuccess(returnCode)) {
@@ -113,33 +133,47 @@ class M3U8Downloader {
 
   Future<void> clean() async {
     for (var segment in m3u8.segments) {
-      var ts = File('$path/$name/${segment.uri}');
+      var ts = File('${config.dictionary}/${config.taskName}/${segment.uri}');
       if (await ts.exists()) {
         await ts.delete();
       } else {
         _logger.severe('not exist ts, file: ${ts.path}');
       }
-    }}
-
-  static Future<void> _isolateDownload(M3U8DownloadTask task) async {
-    initLoggerConfig();
-    for (var i in task.indexes) {
-      await _download(
-          task.m3u8Downloader.m3u8.segments[i],
-          task.m3u8Downloader.path,
-          task.m3u8Downloader.name,
-          task.m3u8Downloader.urlPrefix,
-          task.m3u8Downloader.m3u8Encrypt);
     }
-    task.sendPort.send(true);
   }
 
-  static Future<void> _download(M3U8Segment segment, String path, String name,
-      String urlPrefix, M3U8Encrypt? m3u8Encrypt) async {
+  Future<void> execute() async {
+    await init();
+    await download();
+    await merge();
+    await convert();
+    if (config.cleanTsFiles) {
+      await clean();
+    }
+  }
+
+  static Future<void> _isolateDownload1(M3U8DownloadTask1 task) async {
+    initLoggerConfig();
+    var m3u8Encrypt = task.m3u8.key == null
+        ? null
+        : await _buildEncrypt(task.m3u8.key!, task.config);
+    var receivePort = ReceivePort();
+    task.sendPort.send(receivePort.sendPort);
+    receivePort.listen((message) async {
+      if (message is int) {
+        await _download(task.m3u8.segments[message], m3u8Encrypt, task.config);
+        task.sendPort.send(true);
+      } else {
+        throw M3U8Exception('unknown message');
+      }
+    });
+  }
+
+  static Future<void> _download(M3U8Segment segment, M3U8Encrypt? m3u8Encrypt, DownloaderTaskConfig config) async {
     var tsUri = segment.uri!.startsWith(httpRegExp)
         ? segment.uri!
-        : urlPrefix + segment.uri!;
-    var tsFile = File('$path/$name/${Uri.parse(tsUri).pathSegments.last}');
+        : _parseUrl(config.sourceUrl) + segment.uri!;
+    var tsFile = File('${config.dictionary}/${config.taskName}/${Uri.parse(tsUri).pathSegments.last}');
     if (await tsFile.exists()) {
       _logger.info('skip ${segment.uri}');
       return;
@@ -154,8 +188,8 @@ class M3U8Downloader {
     if (m3u8Encrypt == null) {
       return data;
     }
-    var decryptBytes = m3u8Encrypt.encrypter.decryptBytes(Encrypted(data),
-        iv: m3u8Encrypt.iv == null ? null : IV(m3u8Encrypt.iv!));
+    var decryptBytes = m3u8Encrypt.encrypter.decryptBytes(e.Encrypted(data),
+        iv: m3u8Encrypt.iv == null ? null : e.IV(m3u8Encrypt.iv!));
     return Uint8List.fromList(decryptBytes);
   }
 
@@ -164,22 +198,25 @@ class M3U8Downloader {
     return parse(body);
   }
 
-  Future<M3U8Encrypt> _buildEncrypt(M3U8Key keySegment) async {
+  static Future<M3U8Encrypt> _buildEncrypt(M3U8Key keySegment, DownloaderTaskConfig config) async {
     if (keySegment.method == 'AES-128') {
       var key = await getBytes(keySegment.url!.startsWith(httpRegExp)
           ? keySegment.url!
-          : urlPrefix + keySegment.url!);
+          : _parseUrl(config.sourceUrl) + keySegment.url!);
       var iv = keySegment.iv == null
           ? null
-          : decodeHexString(keySegment.iv!.startsWith('0x')
+          : e.decodeHexString(keySegment.iv!.startsWith('0x')
               ? keySegment.iv!.substring(2)
               : keySegment.iv!);
-      var encrypter = Encrypter(AES(Key(key), mode: AESMode.cbc));
+      var encrypter = e.Encrypter(e.AES(e.Key(key), mode: e.AESMode.cbc));
       return M3U8Encrypt(keySegment.method!, key, iv, encrypter);
     } else {
       throw M3U8Error('nonsupport encrypt method');
     }
   }
+
+  static String _parseUrl(String url) =>
+      url.split(Uri.parse(url).pathSegments.last).first;
 
   static bool _checkM3U8(M3U8 m3u8) {
     if (!m3u8.m3u) {
@@ -194,19 +231,19 @@ class M3U8Downloader {
   }
 }
 
-class M3U8DownloadTask {
-  M3U8Downloader m3u8Downloader;
-  List<int> indexes;
+class M3U8DownloadTask1 {
+  M3U8 m3u8;
+  DownloaderTaskConfig config;
   SendPort sendPort;
 
-  M3U8DownloadTask(this.indexes, this.sendPort, this.m3u8Downloader);
+  M3U8DownloadTask1(this.m3u8, this.config, this.sendPort);
 }
 
 class M3U8Encrypt {
   String method;
   Uint8List key;
   Uint8List? iv;
-  Encrypter encrypter;
+  e.Encrypter encrypter;
 
   M3U8Encrypt(this.method, this.key, this.iv, this.encrypter);
 }
