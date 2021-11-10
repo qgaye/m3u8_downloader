@@ -7,10 +7,13 @@ PODS:
     - ffmpeg-kit-macos-https (= 4.5)
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
+  - url_launcher_macos (0.0.1):
+    - FlutterMacOS
 
 DEPENDENCIES:
   - ffmpeg_kit_flutter (from `Flutter/ephemeral/.symlinks/plugins/ffmpeg_kit_flutter/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
 
 SPEC REPOS:
   trunk:
@@ -21,11 +24,14 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/ffmpeg_kit_flutter/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
+  url_launcher_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
 SPEC CHECKSUMS:
   ffmpeg-kit-macos-https: 8f6c3f22d95caf18e1e00821791738dfa81f57f7
   ffmpeg_kit_flutter: ee76eb10344fa024d454cd7fddc8508b185e9e6c
   FlutterMacOS: 57701585bf7de1b3fc2bb61f6378d73bbdea8424
+  url_launcher_macos: 45af3d61de06997666568a7149c1be98b41c95d4
 
 PODFILE CHECKSUM: 0d3963a09fc94f580682bd88480486da345dc3f0
 

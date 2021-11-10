@@ -20,7 +20,9 @@ final httpRegExp = RegExp('https?://');
 
 class M3U8Downloader with ChangeNotifier {
   DownloaderTaskConfig config;
+  DateTime createTime;
   late M3U8 m3u8;
+
 
   List<M3U8Segment> successSegments = [];
   Map<M3U8Segment, int> retrySegments = {};
@@ -28,7 +30,7 @@ class M3U8Downloader with ChangeNotifier {
 
   int _progress = 0;
   int _total = -1;
-  String _status = "Prepare";
+  String _status = "Preparing";
 
   int get progress => _progress;
 
@@ -53,22 +55,27 @@ class M3U8Downloader with ChangeNotifier {
 
   var downloadSegmentIndex = 0;
 
-  M3U8Downloader(this.config);
+  M3U8Downloader(this.config): createTime = DateTime.now();
 
   Future<void> init() async {
+    status = 'Preparing';
     if (!config.sourceUrl.startsWith(httpRegExp) ||
         !config.sourceUrl.endsWith('.m3u8')) {
+      status = 'Failure';
+      _logger.severe('invalid m3u8 url: ${config.sourceUrl}');
       throw M3U8Exception('invalid url');
     }
     m3u8 = await _buildM3U8(config.sourceUrl);
     if (!_checkM3U8(m3u8)) {
+      status = 'Failure';
+      _logger.severe('invalid m3u8 url: ${config.sourceUrl}');
       throw M3U8Exception('invalid m3u8');
     }
     total = m3u8.segments.length;
-    status = 'Init';
   }
 
   Future<void> download() async {
+    status = 'Downloading';
     var dir = Directory('${config.dictionary}/${config.taskName}');
     if (!(await dir.exists())) {
       await dir.create();
@@ -104,6 +111,7 @@ class M3U8Downloader with ChangeNotifier {
   }
 
   Future<void> merge() async {
+    status = 'Merging';
     var file = File('${config.dictionary}/${config.taskName}/main.ts');
     for (var segment in m3u8.segments) {
       _logger.info('merging ${segment.uri}');
@@ -117,6 +125,7 @@ class M3U8Downloader with ChangeNotifier {
   }
 
   Future<void> convert() async {
+    status = 'Converting';
     FFmpegKit.executeAsync(
         '-i ${config.dictionary}/${config.taskName}/main.ts -c:v copy -c:a copy ${config.dictionary}/${config.taskName}/main.mp4',
         (session) async {
@@ -132,6 +141,7 @@ class M3U8Downloader with ChangeNotifier {
   }
 
   Future<void> clean() async {
+    status = 'Cleaning';
     for (var segment in m3u8.segments) {
       var ts = File('${config.dictionary}/${config.taskName}/${segment.uri}');
       if (await ts.exists()) {

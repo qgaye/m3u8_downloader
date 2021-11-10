@@ -135,6 +135,9 @@ class _AddPageState extends State<AddPage> {
                   ),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.folder_open),
+                    hoverColor: Colors.transparent,
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
                     onPressed: () async => await _filePickerTapped(),
                   ),
                 ),
@@ -159,6 +162,9 @@ class _AddPageState extends State<AddPage> {
                     ),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.info),
+                      hoverColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
                       onPressed: () async => await _concurrencyInfoTapped(),
                     )),
               ),
