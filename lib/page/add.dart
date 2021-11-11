@@ -18,7 +18,7 @@ class _AddPageState extends State<AddPage> {
   bool? _cleanTsFiles = true;
   final TextEditingController _taskNameController = TextEditingController();
   final TextEditingController _m3u8Controller = TextEditingController();
-  final TextEditingController _dictionaryController = TextEditingController();
+  final TextEditingController _directoryController = TextEditingController();
   final TextEditingController _concurrencyController =
       TextEditingController(text: '5');
 
@@ -33,7 +33,7 @@ class _AddPageState extends State<AddPage> {
     _canOpenFilePicker = false;
     var directory = await FilePicker.platform.getDirectoryPath();
     if (directory != null) {
-      _dictionaryController.text = directory;
+      _directoryController.text = directory;
     }
     _canOpenFilePicker = true;
   }
@@ -62,13 +62,13 @@ class _AddPageState extends State<AddPage> {
         ? _taskNameController.text
         : DateTime.now().millisecondsSinceEpoch.toString();
     var sourceUrl = _m3u8Controller.text;
-    var dictionary = _dictionaryController.text.isNotEmpty
-        ? _dictionaryController.text
+    var directory = _directoryController.text.isNotEmpty
+        ? _directoryController.text
         : '~/Downloads';
     var concurrency = int.parse(_concurrencyController.text);
     Navigator.pop(
         context,
-        DownloaderTaskConfig(taskName, sourceUrl, dictionary, concurrency,
+        DownloaderConfig(taskName, sourceUrl, directory, concurrency,
             _cleanTsFiles ?? true));
   }
 
@@ -81,8 +81,8 @@ class _AddPageState extends State<AddPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.6,
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxWidth: MediaQuery.of(context).size.width * 0.8,
+            maxHeight: MediaQuery.of(context).size.height * 0.9,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -120,11 +120,11 @@ class _AddPageState extends State<AddPage> {
                 ),
               ),
               TextField(
-                controller: _dictionaryController,
+                controller: _directoryController,
                 cursorColor: Theme.of(context).textSelectionTheme.cursorColor,
                 decoration: InputDecoration(
                   icon: const Icon(Icons.save),
-                  labelText: 'Dictionary',
+                  labelText: 'Directory',
                   hintText: 'default use ~/Downloads',
                   labelStyle: TextStyle(
                     color: Theme.of(context).primaryColor,

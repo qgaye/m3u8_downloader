@@ -8,7 +8,7 @@ import 'downloader.dart';
 
 final _logger = Logger('m3u8.parser');
 
-M3U8 parse(String contents) {
+M3U8 parseM3U8(String contents) {
   var m3u8 = M3U8();
   LineSplitter.split(contents).map((line) => line.trimLeft()).forEach((line) {
     if (line == '') {
@@ -29,11 +29,11 @@ M3U8 parse(String contents) {
       m3u8.endList = true;
     } else if (line.startsWith('#')) {
       _logger.severe('unknown tag in m3u8, line: $line');
-      throw M3U8Error('unknown or nonsupport tag');
+      throw M3U8ParesException('unknown or nonsupport tag');
     } else {
       if (m3u8.segments.isEmpty || m3u8.segments.last.uri != null) {
         _logger.severe('no suitable segment in m3u8, line: $line');
-        throw M3U8Error('parse no suitable segment');
+        throw M3U8ParesException('parse no suitable segment');
       }
       m3u8.segments.last.uri = line;
     }
@@ -47,7 +47,7 @@ M3U8Key parseKey(String line) {
     var split = value.split('=');
     if (split.length != 2) {
       _logger.severe('invalid filed in $EXT_X_KEY, line: $line');
-      throw M3U8Error('parse $EXT_X_KEY fail');
+      throw M3U8ParesException('parse $EXT_X_KEY fail');
     }
     if (split[0] == 'METHOD') {
       key.method = split[1];
@@ -61,7 +61,7 @@ M3U8Key parseKey(String line) {
       key.iv = split[1];
     } else {
       _logger.severe('unknown field in $EXT_X_KEY, line: $line');
-      throw M3U8Error('parse $EXT_X_KEY fail');
+      throw M3U8ParesException('parse $EXT_X_KEY fail');
     }
   });
   return key;

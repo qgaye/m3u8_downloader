@@ -23,14 +23,14 @@ void main() async {
     var site = Jable(url);
     var extract = await site.extract(VideoType.m3u8);
     logger.info(extract);
-    var config = DownloaderTaskConfig(
+    var config = DownloaderConfig(
         Uri.parse(url).pathSegments.lastWhere((element) => element.isNotEmpty),
         extract,
         '/Users/qgaye/Downloads',
         5,
         true);
     var downloader = M3U8Downloader(config);
-    await downloader.init();
+    await downloader.parse();
     await downloader.download();
     await downloader.merge();
     // await downloader.convert();

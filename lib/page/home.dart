@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
+import 'package:m3u8_downloader/common/extensions.dart';
 import 'package:m3u8_downloader/m3u8/downloader.dart';
+import 'package:m3u8_downloader/m3u8/status.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,7 +25,7 @@ class _HomePageState extends State<HomePage>
   final DownloaderList downloaderList = DownloaderList();
 
   Future<void> _addTapped() async {
-    var downloaderTaskConfig = await Navigator.push<DownloaderTaskConfig?>(
+    var downloaderTaskConfig = await Navigator.push<DownloaderConfig?>(
         context,
         MaterialPageRoute(builder: (context) => const AddPage('New M3U8')));
     if (downloaderTaskConfig == null) {
@@ -35,13 +37,17 @@ class _HomePageState extends State<HomePage>
     downloader.execute(); // not await
   }
 
-  Future<void> _folderTapped(DownloaderTaskConfig config) async {
-    var path = 'file://${config.dictionary}';
+  Future<void> _folderTapped(DownloaderConfig config) async {
+    var path = 'file://${config.directory}';
     if (await canLaunch(path)) {
       await launch(path);
     } else {
       _logger.severe('cannot launch path: $path');
     }
+  }
+
+  void _stopTapped(M3U8Downloader downloader) {
+    downloader.interrupt();
   }
 
   @override
@@ -63,7 +69,7 @@ class _HomePageState extends State<HomePage>
             value: downloaderList,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.6,
+                maxWidth: MediaQuery.of(context).size.width * 0.8,
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
@@ -107,10 +113,10 @@ class _HomePageState extends State<HomePage>
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: LinearProgressIndicator(
-                        color: downloader.status == 'Failure'
+                        color: isFail(downloader.status)
                             ? Colors.red
                             : Theme.of(context).primaryColor,
-                        value: downloader.status == 'Failure'
+                        value: isFail(downloader.status)
                             ? 1
                             : downloader.total <= 0
                                 ? 0
@@ -124,7 +130,7 @@ class _HomePageState extends State<HomePage>
                         children: [
                           Text(DateFormat('yyyy-MM-dd HH:mm:ss')
                               .format(downloader.createTime)),
-                          Text(downloader.status),
+                          Text(downloader.status.name()),
                         ],
                       ),
                     ),
@@ -141,7 +147,7 @@ class _HomePageState extends State<HomePage>
                           const SizedBox(width: 8),
                           TextButton(
                             child: const Text("stop"),
-                            onPressed: () {},
+                            onPressed: () => _stopTapped(downloader),
                           )
                         ],
                       ),
@@ -170,18 +176,18 @@ class DownloaderList with ChangeNotifier {
   }
 }
 
-class DownloaderTaskConfig {
+class DownloaderConfig {
   String taskName;
   String sourceUrl;
-  String dictionary;
+  String directory;
   int concurrency;
   bool cleanTsFiles;
 
-  DownloaderTaskConfig(this.taskName, this.sourceUrl, this.dictionary,
+  DownloaderConfig(this.taskName, this.sourceUrl, this.directory,
       this.concurrency, this.cleanTsFiles);
 
   @override
   String toString() {
-    return 'DownloaderTaskConfig{taskName: $taskName, sourceUrl: $sourceUrl, dictionary: $dictionary, concurrency: $concurrency, cleanTsFiles: $cleanTsFiles}';
+    return 'DownloaderTaskConfig{taskName: $taskName, sourceUrl: $sourceUrl, directory: $directory, concurrency: $concurrency, cleanTsFiles: $cleanTsFiles}';
   }
 }
