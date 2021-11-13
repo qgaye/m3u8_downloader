@@ -28,13 +28,10 @@ void main() async {
         extract,
         '/Users/qgaye/Downloads',
         5,
+        false,
         true);
     var downloader = M3U8Downloader(config);
-    await downloader.parse();
-    await downloader.download();
-    await downloader.merge();
-    // await downloader.convert();
-    await downloader.clean();
+    await downloader.execute();
   });
 
 }

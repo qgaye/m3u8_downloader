@@ -28,3 +28,7 @@ bool isFail(DownloaderStatus status) {
       status == DownloaderStatus.ConvertFail ||
       status == DownloaderStatus.Fail;
 }
+
+bool isInterrupt(DownloaderStatus status) {
+  return status == DownloaderStatus.Interrupted;
+}

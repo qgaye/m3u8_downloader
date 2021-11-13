@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
-import 'package:m3u8_downloader/common/extensions.dart';
 import 'package:m3u8_downloader/m3u8/downloader.dart';
 import 'package:m3u8_downloader/m3u8/status.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -25,8 +25,7 @@ class _HomePageState extends State<HomePage>
   final DownloaderList downloaderList = DownloaderList();
 
   Future<void> _addTapped() async {
-    var downloaderTaskConfig = await Navigator.push<DownloaderConfig?>(
-        context,
+    var downloaderTaskConfig = await Navigator.push<DownloaderConfig?>(context,
         MaterialPageRoute(builder: (context) => const AddPage('New M3U8')));
     if (downloaderTaskConfig == null) {
       return;
@@ -34,11 +33,11 @@ class _HomePageState extends State<HomePage>
     _logger.info(downloaderTaskConfig.toString());
     var downloader = M3U8Downloader(downloaderTaskConfig);
     downloaderList.add(downloader);
-    downloader.execute(); // not await
+    await downloader.execute(); // not await
   }
 
-  Future<void> _folderTapped(DownloaderConfig config) async {
-    var path = 'file://${config.directory}';
+  Future<void> _folderTapped(M3U8Downloader downloader) async {
+    var path = 'file://${downloader.config.directory}';
     if (await canLaunch(path)) {
       await launch(path);
     } else {
@@ -48,6 +47,18 @@ class _HomePageState extends State<HomePage>
 
   void _stopTapped(M3U8Downloader downloader) {
     downloader.interrupt();
+  }
+
+  Future<void> _openTapped(M3U8Downloader downloader) async {
+    await _folderTapped(downloader);
+  }
+
+  Future<void> _resumeTapped(M3U8Downloader downloader) async {
+    await downloader.execute();
+  }
+
+  Future<void> _retryTapped(M3U8Downloader downloader) async {
+    await downloader.execute();
   }
 
   @override
@@ -130,7 +141,7 @@ class _HomePageState extends State<HomePage>
                         children: [
                           Text(DateFormat('yyyy-MM-dd HH:mm:ss')
                               .format(downloader.createTime)),
-                          Text(downloader.status.name()),
+                          Text(downloader.buildStatus()),
                         ],
                       ),
                     ),
@@ -142,13 +153,10 @@ class _HomePageState extends State<HomePage>
                           TextButton(
                             child: const Text("folder"),
                             onPressed: () async =>
-                                await _folderTapped(downloader.config),
+                                await _folderTapped(downloader),
                           ),
                           const SizedBox(width: 8),
-                          TextButton(
-                            child: const Text("stop"),
-                            onPressed: () => _stopTapped(downloader),
-                          )
+                          buildLastButton(downloader),
                         ],
                       ),
                     ),
@@ -165,6 +173,29 @@ class _HomePageState extends State<HomePage>
 
   @override
   bool get wantKeepAlive => true;
+
+  TextButton buildLastButton(M3U8Downloader downloader) {
+    if (isSuccess(downloader.status)) {
+      return TextButton(
+        child: const Text("open"),
+        onPressed: () => _openTapped(downloader),
+      );
+    } else if (isInterrupt(downloader.status)) {
+      return TextButton(
+        child: const Text("resume"),
+        onPressed: () => _resumeTapped(downloader),
+      );
+    } else if (isFail(downloader.status)) {
+      return TextButton(
+        child: const Text("retry"),
+        onPressed: () => _retryTapped(downloader),
+      );
+    }
+    return TextButton(
+      child: const Text("stop"),
+      onPressed: () => _stopTapped(downloader),
+    );
+  }
 }
 
 class DownloaderList with ChangeNotifier {
@@ -181,10 +212,11 @@ class DownloaderConfig {
   String sourceUrl;
   String directory;
   int concurrency;
+  bool convertTs;
   bool cleanTsFiles;
 
   DownloaderConfig(this.taskName, this.sourceUrl, this.directory,
-      this.concurrency, this.cleanTsFiles);
+      this.concurrency, this.convertTs, this.cleanTsFiles);
 
   @override
   String toString() {
