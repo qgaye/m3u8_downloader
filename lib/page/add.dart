@@ -122,7 +122,7 @@ class _AddPageState extends State<AddPage> {
                       return 'please enter m3u8 url';
                     }
                     if (!value.startsWith(RegExp('https?://')) ||
-                        value.endsWith('.m3u8')) {
+                        !value.endsWith('.m3u8')) {
                       return 'invalid m3u8 url';
                     }
                     return null;

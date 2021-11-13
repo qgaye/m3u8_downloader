@@ -1,4 +1,9 @@
 # m3u8_downloader
 
-A new Flutter project.
+m3u8_downloader only support MacOS version over 10.15
+
+![create](./screenshots/create.png)
+
+![home](./screenshots/home.png)
+
 
